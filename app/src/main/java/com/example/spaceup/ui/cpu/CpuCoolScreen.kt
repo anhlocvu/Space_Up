@@ -42,7 +42,9 @@ fun CpuCoolScreen(
     var cpuState by remember { mutableStateOf<CpuUiState>(CpuUiState.Idle) }
     val coroutineScope = rememberCoroutineScope()
 
-    var currentTemp by remember { mutableFloatStateOf(43.8f) } // Nhiệt độ ban đầu nóng
+    // Đọc nhiệt độ CPU (pin) thực tế từ trạng thái hệ thống dùng chung
+    val initialTemp = com.example.spaceup.data.DefaultDataRepository.systemStatus.value.cpuTempCc
+    var currentTemp by remember { mutableFloatStateOf(initialTemp) }
 
     val sampleActions = listOf(
         "Đang quét nhiệt độ các nhân CPU...",
@@ -63,8 +65,8 @@ fun CpuCoolScreen(
                 delay(400)
             }
 
-            // Nhiệt độ sau khi hạ nhiệt dao động từ 34.0°C đến 36.5°C
-            val finalTemp = Random.nextFloat() * 2.5f + 34.0f
+            // Hạ nhiệt thực tế (giảm từ 2.5°C đến 5.0°C), giới hạn tối thiểu mát mẻ ở 33.0°C - 36.5°C
+            val finalTemp = (currentTemp - (Random.nextFloat() * 2.5f + 2.5f)).coerceIn(33.0f, 37.0f)
             val originalTemp = currentTemp
             currentTemp = finalTemp
             

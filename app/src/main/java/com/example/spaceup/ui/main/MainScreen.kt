@@ -3,6 +3,8 @@ package com.example.spaceup.ui.main
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -101,6 +103,7 @@ internal fun MainScreen(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -302,14 +305,14 @@ fun MenuButton(
     onClick: () -> Unit,
     accessibilityLabel: String
 ) {
-    Surface(
-        onClick = onClick,
+    Card(
         shape = RoundedCornerShape(16.dp),
-        color = SpaceCardBackground,
+        colors = CardDefaults.cardColors(containerColor = SpaceCardBackground),
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp) // Đảm bảo chiều cao tối thiểu cho Touch Target
-            .semantics {
+            .defaultMinSize(minHeight = 64.dp)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) {
                 contentDescription = accessibilityLabel
             }
     ) {

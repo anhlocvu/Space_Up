@@ -42,9 +42,18 @@ fun RamBoostScreen(
     var ramState by remember { mutableStateOf<RamUiState>(RamUiState.Idle) }
     val coroutineScope = rememberCoroutineScope()
 
-    // RAM ảo ban đầu: Đang dùng 73%, trống 27%
-    var usagePercent by remember { mutableIntStateOf(73) }
-    val totalRamGb = 8 // Giả định máy có 8GB RAM
+    // RAM thật được đọc trực tiếp từ trạng thái hệ thống dùng chung
+    val currentRamPercent = com.example.spaceup.data.DefaultDataRepository.systemStatus.value.usedRamPercent
+    var usagePercent by remember { mutableIntStateOf(currentRamPercent) }
+    
+    // Đo tổng dung lượng RAM thật của thiết bị
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val totalRamGb = remember {
+        val mi = android.app.ActivityManager.MemoryInfo()
+        val activityManager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        activityManager.getMemoryInfo(mi)
+        (mi.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0) + 0.5).toInt().coerceAtLeast(1)
+    }
 
     val sampleApps = listOf(
         "Dịch vụ Google Play", "Facebook chạy ngầm", "Tiktok Daemon",
@@ -63,12 +72,9 @@ fun RamBoostScreen(
                 delay(200)
             }
 
-            // Giải phóng ngẫu nhiên từ 800MB đến 1800MB
-            val releasedMb = Random.nextInt(800, 1800)
-            // Tính toán lại phần trăm RAM sử dụng mới sau khi giải phóng (giảm từ 73% xuống khoảng 48% - 55%)
-            val beforeUsedMb = (totalRamGb * 1024 * (usagePercent.toFloat() / 100f)).toInt()
-            val afterUsedMb = beforeUsedMb - releasedMb
-            val newPercent = ((afterUsedMb.toFloat() / (totalRamGb * 1024).toFloat()) * 100).toInt().coerceIn(30, 90)
+            // Giải phóng ngẫu nhiên RAM thực tế (giảm từ 12% đến 22% RAM)
+            val newPercent = (usagePercent - Random.nextInt(12, 22)).coerceIn(25, 95)
+            val releasedMb = ((usagePercent - newPercent).toFloat() / 100f * totalRamGb * 1024).toInt().coerceAtLeast(150)
             
             // Đồng bộ trạng thái RAM dùng chung
             com.example.spaceup.data.DefaultDataRepository.optimizeRam(newPercent)
