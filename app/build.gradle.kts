@@ -4,9 +4,28 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
 }
 
+import java.util.Properties
+import java.io.FileInputStream
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
 android {
     namespace = "com.example.spaceup"
     compileSdk = 36
+    
+    signingConfigs {
+        create("release") {
+            storeFile = file("spaceup-release-key.jks")
+            storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD") ?: System.getenv("RELEASE_STORE_PASSWORD")
+            keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS") ?: System.getenv("RELEASE_KEY_ALIAS")
+            keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD") ?: System.getenv("RELEASE_KEY_PASSWORD")
+        }
+    }
+
     defaultConfig {
         applicationId = "com.example.spaceup"
         minSdk = 24
@@ -19,6 +38,10 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Tự động ký nếu file khóa tồn tại trong thư mục app
+            if (file("spaceup-release-key.jks").exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
