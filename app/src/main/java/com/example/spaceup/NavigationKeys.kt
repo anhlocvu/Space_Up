@@ -10,4 +10,6 @@ import kotlinx.serialization.Serializable
 @Serializable data object RamBoost : NavKey
 @Serializable data object CpuCool : NavKey
 @Serializable data object About : NavKey
+@Serializable data object LargeFiles : NavKey
+@Serializable data object DuplicateFiles : NavKey
 

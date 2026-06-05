@@ -3,6 +3,8 @@ package com.example.spaceup.ui.junk
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -27,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.spaceup.theme.*
+import java.io.File
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,11 +40,12 @@ fun ScanJunkScreen(
     viewModel: JunkViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Tự động quét khi màn hình được hiển thị lần đầu
     LaunchedEffect(Unit) {
         if (uiState is JunkUiState.Idle) {
-            viewModel.startScanning()
+            viewModel.startScanning(context)
         }
     }
 
@@ -88,10 +92,14 @@ fun ScanJunkScreen(
                     }
                     is JunkUiState.ScanCompleted -> {
                         ScanCompletedView(
-                            fileCount = state.fileCount,
-                            junkBytes = state.junkBytes,
+                            junkFiles = state.junkFiles,
+                            duplicateGroups = state.duplicateGroups,
+                            selectedFiles = state.selectedFiles,
+                            onToggleSelection = { file -> viewModel.toggleFileSelection(file) },
+                            onSelectAll = { viewModel.selectAll() },
+                            onDeselectAll = { viewModel.deselectAll() },
                             onCleanClick = {
-                                viewModel.startCleaning(state.fileCount, state.junkBytes)
+                                viewModel.startCleaning(context)
                             }
                         )
                     }
@@ -187,84 +195,398 @@ fun ScanningView(progress: Float, currentFile: String) {
     }
 }
 
-// 2. Giao diện quét xong, báo kết quả quét
+// 2. Giao diện quét xong, báo kết quả quét kèm danh sách chọn file
 @Composable
-fun ScanCompletedView(fileCount: Int, junkBytes: Long, onCleanClick: () -> Unit) {
-    val formattedSize = formatBytes(junkBytes)
-    
+fun ScanCompletedView(
+    junkFiles: List<File>,
+    duplicateGroups: Map<String, List<File>>,
+    selectedFiles: Set<File>,
+    onToggleSelection: (File) -> Unit,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
+    onCleanClick: () -> Unit
+) {
+    val totalJunkBytes = selectedFiles.sumOf { it.length() }
+    val formattedSize = formatBytes(totalJunkBytes)
+    val totalJunkCount = selectedFiles.size
+
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.Center
+        // Phần tóm tắt dung lượng trên cùng (cố định)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SpaceCardBackground),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = "Quét hoàn tất. Phát hiện thấy tổng số tệp đã chọn để dọn dẹp là $totalJunkCount tệp. Dung lượng có thể giải phóng là $formattedSize."
+                }
         ) {
-            Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(RoundedCornerShape(60.dp))
-                    .background(SpaceWarning.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = null,
-                    tint = SpaceWarning,
-                    modifier = Modifier.size(56.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(RoundedCornerShape(25.dp))
+                            .background(SpaceWarning.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = SpaceWarning,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text(
+                            text = "Quét Rác Hoàn Tất",
+                            color = SpaceTextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Đã chọn dọn dẹp: $totalJunkCount tệp",
+                            color = SpaceTextSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = formattedSize,
+                    color = SpaceWarning,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.ExtraBold
                 )
             }
-            Spacer(modifier = Modifier.height(28.dp))
-            Text(
-                text = "Quét Rác Hoàn Tất",
-                color = SpaceTextPrimary,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Text thông báo tổng dung lượng rác và số lượng file rác
-            Text(
-                text = "Phát hiện $fileCount tệp tin rác",
-                color = SpaceTextSecondary,
-                fontSize = 18.sp,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Có thể giải phóng: $formattedSize",
-                color = SpaceWarning,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Ứng dụng sẽ xóa toàn bộ các tệp tin cache ứng dụng dư thừa, tệp tạm thời, nhật ký hệ thống và tài nguyên thừa trong máy.",
-                color = SpaceTextSecondary,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 24.dp)
-            )
         }
 
+        // Thanh công cụ chọn nhanh (Chọn tất cả / Bỏ chọn) cho người dùng
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Danh sách tệp tin phát hiện",
+                color = SpaceTextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = onSelectAll,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.defaultMinSize(minWidth = 1.dp, minHeight = 1.dp)
+                ) {
+                    Text("Chọn tất cả", color = SpacePrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                TextButton(
+                    onClick = onDeselectAll,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.defaultMinSize(minWidth = 1.dp, minHeight = 1.dp)
+                ) {
+                    Text("Bỏ chọn", color = SpaceTextSecondary, fontSize = 13.sp)
+                }
+            }
+        }
+
+        // Danh sách các file có thể cuộn được (Chiếm phần thân)
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 1. Phân mục tệp rác & tệp tạm
+            if (junkFiles.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "TỆP RÁC & BỘ NHỚ TẠM THỜI (${junkFiles.size})",
+                        color = SpaceTextSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+                    )
+                }
+                items(junkFiles) { file ->
+                    val isSelected = selectedFiles.contains(file)
+                    FileJunkItem(
+                        fileName = file.name,
+                        filePath = file.parent ?: "",
+                        fileSize = formatBytes(file.length()),
+                        isSelected = isSelected,
+                        onCheckedChange = { onToggleSelection(file) },
+                        accessibilityLabel = "Tệp rác: ${file.name}, thư mục: ${file.parent ?: "không xác định"}, kích thước: ${formatBytes(file.length())}. ${if (isSelected) "Đã chọn để xóa" else "Chưa chọn để xóa"}"
+                    )
+                }
+            }
+
+            // 2. Phân mục tệp tin trùng lặp
+            if (duplicateGroups.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "TỆP TRÙNG LẶP PHÁT HIỆN (${duplicateGroups.size} nhóm)",
+                        color = SpaceTextSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+                    )
+                }
+                
+                duplicateGroups.forEach { (hash, files) ->
+                    item {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SpaceCardBackground.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 2.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "Nhóm trùng lặp (${files.size} tệp giống nhau):",
+                                    color = SpacePrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                files.forEachIndexed { index, file ->
+                                    if (index == 0) {
+                                        // Bản gốc (không cho phép chọn xóa)
+                                        DuplicateFileItem(
+                                            fileName = file.name,
+                                            filePath = file.parent ?: "",
+                                            fileSize = formatBytes(file.length()),
+                                            isOriginal = true,
+                                            isSelected = false,
+                                            onCheckedChange = {},
+                                            accessibilityLabel = "Bản gốc: ${file.name}, thư mục: ${file.parent ?: "không xác định"}, kích thước: ${formatBytes(file.length())}. Trạng thái: Luôn giữ lại an toàn."
+                                        )
+                                    } else {
+                                        // Bản sao (cho chọn xóa)
+                                        val isSelected = selectedFiles.contains(file)
+                                        DuplicateFileItem(
+                                            fileName = file.name,
+                                            filePath = file.parent ?: "",
+                                            fileSize = formatBytes(file.length()),
+                                            isOriginal = false,
+                                            isSelected = isSelected,
+                                            onCheckedChange = { onToggleSelection(file) },
+                                            accessibilityLabel = "Bản sao trùng lặp: ${file.name}, thư mục: ${file.parent ?: "không xác định"}, kích thước: ${formatBytes(file.length())}. ${if (isSelected) "Đã chọn để xóa" else "Chưa chọn để xóa"}"
+                                        )
+                                    }
+                                    if (index < files.size - 1) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Trường hợp không quét ra tệp nào (rác trống)
+            if (junkFiles.isEmpty() && duplicateGroups.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Bộ nhớ sạch sẽ! Không tìm thấy tệp rác hay tệp trùng lặp nào.",
+                            color = SpaceTextSecondary,
+                            fontSize = 15.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Nút hành động dọn dẹp ở dưới cùng (cố định)
         Button(
             onClick = onCleanClick,
+            enabled = totalJunkCount > 0,
             colors = ButtonDefaults.buttonColors(containerColor = SpacePrimary),
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
                 .semantics {
-                    contentDescription = "Bắt đầu dọn dẹp $formattedSize dung lượng rác"
+                    contentDescription = "Bắt đầu dọn dẹp $totalJunkCount tệp tin đã chọn, giải phóng $formattedSize dung lượng rác"
                 }
         ) {
             Text(
                 text = "Bắt đầu dọn rác",
                 color = SpaceTextPrimary,
                 fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+fun FileJunkItem(
+    fileName: String,
+    filePath: String,
+    fileSize: String,
+    isSelected: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    accessibilityLabel: String
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SpaceCardBackground),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                contentDescription = accessibilityLabel
+            }
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = onCheckedChange,
+                colors = CheckboxDefaults.colors(
+                    checkedColor = SpacePrimary,
+                    uncheckedColor = SpaceTextSecondary
+                )
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = fileName,
+                    color = SpaceTextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = filePath,
+                    color = SpaceTextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = fileSize,
+                color = SpaceAccent,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+fun DuplicateFileItem(
+    fileName: String,
+    filePath: String,
+    fileSize: String,
+    isOriginal: Boolean,
+    isSelected: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    accessibilityLabel: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = accessibilityLabel
+            }
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isOriginal) Color.Transparent else SpaceBackground.copy(alpha = 0.2f))
+            .padding(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (isOriginal) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .padding(4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Checkbox(
+                    checked = false,
+                    onCheckedChange = null,
+                    enabled = false
+                )
+            }
+        } else {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = onCheckedChange,
+                colors = CheckboxDefaults.colors(
+                    checkedColor = SpacePrimary,
+                    uncheckedColor = SpaceTextSecondary
+                )
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = fileName,
+                color = if (isOriginal) SpaceTextPrimary.copy(alpha = 0.8f) else SpaceTextPrimary,
+                fontSize = 13.sp,
+                fontWeight = if (isOriginal) FontWeight.Normal else FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = if (isOriginal) "Bản gốc: $filePath" else "Bản sao: $filePath",
+                color = SpaceTextSecondary,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        if (isOriginal) {
+            Text(
+                text = "GIỮ LẠI",
+                color = SpaceSuccess,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        } else {
+            Text(
+                text = fileSize,
+                color = SpaceWarning,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold
             )
         }

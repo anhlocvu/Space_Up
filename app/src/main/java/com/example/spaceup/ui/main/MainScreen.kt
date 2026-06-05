@@ -10,10 +10,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,8 +46,82 @@ fun MainScreen(
     modifier: Modifier = Modifier,
     viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(DefaultDataRepository) },
 ) {
+    // Tự động làm mới dữ liệu hệ thống (dung lượng, RAM, CPU) mỗi khi quay lại màn hình chính
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.refreshStatus()
+    }
+
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     
+    var showPermissionDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var pendingNavKey by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<NavKey?>(null) }
+
+    val checkPermissionAndNavigate: (NavKey) -> Unit = { navKey ->
+        if (navKey == ScanJunk || navKey == LargeFiles || navKey == DuplicateFiles) {
+            if (viewModel.hasStoragePermission()) {
+                onItemClick(navKey)
+            } else {
+                pendingNavKey = navKey
+                showPermissionDialog = true
+            }
+        } else {
+            onItemClick(navKey)
+        }
+    }
+
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            title = {
+                Text(
+                    text = "Quyền Truy Cập Bộ Nhớ",
+                    color = SpaceTextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "Space Up cần quyền truy cập bộ nhớ đầy đủ để quét và dọn dẹp các tệp rác, tệp tạm thời cũng như các tệp trùng lặp thực tế trên thiết bị của bạn. Vui lòng cấp quyền ở màn hình cài đặt tiếp theo.",
+                    color = SpaceTextSecondary,
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val intent = viewModel.getPermissionIntent()
+                        if (intent != null) {
+                            try {
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                        showPermissionDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SpacePrimary)
+                ) {
+                    Text("Cấp Quyền", color = SpaceTextPrimary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showPermissionDialog = false }
+                ) {
+                    Text("Để Sau", color = SpaceTextSecondary)
+                }
+            },
+            containerColor = SpaceCardBackground,
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.semantics {
+                contentDescription = "Hộp thoại yêu cầu quyền truy cập bộ nhớ. Space Up cần quyền truy cập bộ nhớ đầy đủ để quét và dọn dẹp các tệp rác trên thiết bị. Nhấn đúp vào nút Cấp Quyền để đi tới cài đặt, hoặc nút Để Sau để bỏ qua."
+            }
+        )
+    }
+
     when (state) {
         MainScreenUiState.Loading -> {
             Box(
@@ -55,7 +134,7 @@ fun MainScreen(
         is MainScreenUiState.Success -> {
             MainScreen(
                 status = (state as MainScreenUiState.Success).status,
-                onItemClick = onItemClick,
+                onItemClick = checkPermissionAndNavigate,
                 modifier = modifier
             )
         }
@@ -175,6 +254,16 @@ internal fun MainScreen(
                     onClick = { onItemClick(CpuCool) },
                     accessibilityLabel = "Tối ưu và hạ nhiệt CPU, nhiệt độ hiện tại là ${String.format("%.1f", status.cpuTempCc)} độ C"
                 )
+
+                MenuButton(
+                    title = "Dọn Tệp Dung Lượng Lớn",
+                    subtitle = "Tìm và xóa các tệp lớn trên máy",
+                    icon = Icons.Default.Warning,
+                    color = SpaceWarning,
+                    onClick = { onItemClick(LargeFiles) },
+                    accessibilityLabel = "Dọn tệp dung lượng lớn, nhấn đúp để bắt đầu quét các tệp lớn hơn 10 Megabytes thực tế trên máy"
+                )
+
 
                 MenuButton(
                     title = "Giới Thiệu Ứng Dụng",

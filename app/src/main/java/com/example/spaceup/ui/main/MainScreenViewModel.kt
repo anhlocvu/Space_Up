@@ -16,7 +16,7 @@ sealed interface MainScreenUiState {
     data class Success(val status: SystemStatus) : MainScreenUiState
 }
 
-class MainScreenViewModel(dataRepository: DataRepository) : ViewModel() {
+class MainScreenViewModel(private val dataRepository: DataRepository) : ViewModel() {
     val uiState: StateFlow<MainScreenUiState> =
         dataRepository.systemStatus
             .map<SystemStatus, MainScreenUiState> { MainScreenUiState.Success(it) }
@@ -26,4 +26,16 @@ class MainScreenViewModel(dataRepository: DataRepository) : ViewModel() {
                 SharingStarted.WhileSubscribed(5000),
                 MainScreenUiState.Loading
             )
+
+    fun refreshStatus() {
+        dataRepository.refreshStatus()
+    }
+
+    fun hasStoragePermission(): Boolean {
+        return dataRepository.hasStoragePermission()
+    }
+
+    fun getPermissionIntent(): android.content.Intent? {
+        return dataRepository.getPermissionIntent()
+    }
 }

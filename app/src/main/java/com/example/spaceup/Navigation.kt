@@ -13,6 +13,8 @@ import com.example.spaceup.ui.junk.ScanJunkScreen
 import com.example.spaceup.ui.ram.RamBoostScreen
 import com.example.spaceup.ui.cpu.CpuCoolScreen
 import com.example.spaceup.ui.about.AboutScreen
+import com.example.spaceup.ui.largefiles.LargeFilesScreen
+import com.example.spaceup.ui.duplicate.DuplicateFilesScreen
 
 @Composable
 fun MainNavigation() {
@@ -48,6 +50,18 @@ fun MainNavigation() {
             }
             entry<About> {
                 AboutScreen(
+                    onBack = { backStack.removeLastOrNull() },
+                    modifier = Modifier.safeDrawingPadding()
+                )
+            }
+            entry<LargeFiles> {
+                LargeFilesScreen(
+                    onBack = { backStack.removeLastOrNull() },
+                    modifier = Modifier.safeDrawingPadding()
+                )
+            }
+            entry<DuplicateFiles> {
+                DuplicateFilesScreen(
                     onBack = { backStack.removeLastOrNull() },
                     modifier = Modifier.safeDrawingPadding()
                 )
